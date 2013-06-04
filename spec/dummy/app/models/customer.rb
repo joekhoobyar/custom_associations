@@ -1,5 +1,7 @@
 class Customer < ActiveRecord::Base
   
-  has_one_custom :address, :conditions=>proc{ {:customer_number=>customer_number} }
+  has_one_custom :address,
+    :joins=>['INNER JOIN customer_addresses ON customer_addresses.address_id = addresses.id'],
+    :conditions=>proc{ {:'customer_addresses.customer_number'=>customer_number} }
     
 end
