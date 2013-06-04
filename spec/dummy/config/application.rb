@@ -3,13 +3,13 @@ require File.expand_path('../boot', __FILE__)
 # Pick the frameworks you want:
 require "active_record/railtie"
 require "action_controller/railtie"
-require "action_mailer/railtie"
-require "active_resource/railtie"
-# require "sprockets/railtie"
-# require "rails/test_unit/railtie"
+#require "action_mailer/railtie"
+#require "active_resource/railtie"
+#require "sprockets/railtie"
+#require "rails/test_unit/railtie"
 
 Bundler.require(*Rails.groups)
-require "column_aliases"
+require "custom_associations"
 
 module Dummy
   class Application < Rails::Application
