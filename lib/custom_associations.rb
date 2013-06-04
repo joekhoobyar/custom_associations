@@ -78,15 +78,21 @@ module CustomAssociations
     
     module CustomizablePreloader
       extend ActiveSupport::Concern
-		  
-      def preloader_for(reflection)
+      
+      included do
+        alias_method_chain :preloader_for, :custom
+      end
+
+    private
+    		  
+      def preloader_for_with_custom(reflection)
         case reflection.macro
         when :has_many_custom
-          HasMany
+          ActiveRecord::Associations::Preloader::HasMany
         when :has_one_custom
-          HasOne
+          ActiveRecord::Associations::Preloader::HasOne
         else
-          super
+          preloader_for_without_custom(reflection)
         end
       end
     end
