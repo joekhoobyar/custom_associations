@@ -141,10 +141,13 @@ module CustomAssociations
         case reflection.source_macro
         when :has_one_custom, :has_many_custom
           Array.wrap(reflection.options[:joins]).each do |join|
-	          join = join.join(' ') if Array===join && join.all?{|j| j.is_a?(String)}
-	          next if join.blank?
-	          join = Arel.sql(join) if String===join
-	          relation.join(join)
+	          next if join.blank? or ! join.is_a?(String)
+	          if join !~ /^\s*(?:(?:LEFT|RIGHT|INNER|OUTER|STRAIGHT)\s+)+JOIN\s+/ism
+	            join = "#{join_type==Arel::OuterJoin ? 'LEFT OUTER' : 'INNER'} JOIN #{join}"
+	          elsif join_type==Arel::OuterJoin
+	            join = join.sub(/^\s*(?:LEFT\s+)?INNER\b/,'LEFT OUTER')
+	          end
+	          relation.join(Arel.sql(join))
           end
         end
 	      join_to_without_custom(relation)
