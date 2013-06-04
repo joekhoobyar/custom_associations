@@ -76,44 +76,7 @@ module CustomAssociations
   # Customizable associations
   module Associations
 
-#    # Extensions for the preloader strategy for eager-loading associated records.    
-#    module Preloader
-#      extend ActiveSupport::Concern
-#      
-#      included do
-#        alias_method_chain :preloader_for, :custom
-#      end
-#
-#      class HasOneCustom < ActiveRecord::Associations::Preloader::HasOne
-#        
-#        # Overridden to includes any specified joins.
-#        def build_scope
-#          super.joins(preload_options[:joins] || options[:joins])
-#        end
-#      end
-#      
-#      class HasManyCustom < ActiveRecord::Associations::Preloader::HasMany
-#        
-#        # Overridden to includes any specified joins.
-#        def build_scope
-#          super.joins(preload_options[:joins] || options[:joins])
-#        end
-#      end
-#      
-#    private
-#    		  
-#      def preloader_for_with_custom(reflection)
-#        case reflection.macro
-#        when :has_many_custom
-#          HasManyCustom
-#        when :has_one_custom
-#          HasOneCustom
-#        else
-#          preloader_for_without_custom(reflection)
-#        end
-#      end
-#    end
-      
+    # Extensions to support custom associations.
     module JoinAssociation
       extend ActiveSupport::Concern
 		  
@@ -141,10 +104,13 @@ module CustomAssociations
         case reflection.source_macro
         when :has_one_custom, :has_many_custom
           Array.wrap(reflection.options[:joins]).each do |join|
-	          join = join.join(' ') if Array===join && join.all?{|j| j.is_a?(String)}
-	          next if join.blank?
-	          join = Arel.sql(join) if String===join
-	          relation.join(join)
+	          next if join.blank? or ! join.is_a?(String)
+	          if join !~ /^\s*(?:(?:LEFT|RIGHT|INNER|OUTER|STRAIGHT)\s+)+JOIN\s+/ism
+	            join = "#{join_type==Arel::OuterJoin ? 'LEFT OUTER' : 'INNER'} JOIN #{join}"
+	          elsif join_type==Arel::OuterJoin
+	            join = join.sub(/^\s*(?:LEFT\s+)?INNER\b/,'LEFT OUTER')
+	          end
+	          relation.join(Arel.sql(join))
           end
         end
 	      join_to_without_custom(relation)
@@ -152,6 +118,7 @@ module CustomAssociations
 
     end
     
+    # Extensions to support custom associations.
     module JoinDependency
       extend ActiveSupport::Concern
       
@@ -208,36 +175,55 @@ module CustomAssociations
       
     end
     
-    # Patterned after belongs_to and has_one associations in AR.
-    class HasOneCustomAssociation < ActiveRecord::Associations::Association
-
-      # Ensure that the association is readonly.
-      begin undef_method :creation_attributes, :set_owner_attributes, :build_record
-      rescue NameError
-      end
+    module CustomizableAssociation
       
-      # Copied from ActiveRecord::Associations::SingularAssociation
-      def reader(force_reload = false)
-        if force_reload
-          klass.uncached { reload }
-        elsif !loaded? || stale_target?
-          reload
+      # Undefine all mutator methods.
+      def self.included(base)
+        [ :writer, :ids_writer, :set_owner_attributes, :add_to_target, :set_new_record,
+          :replace, :replace_records, :callback, :callbacks_for,
+          :build, :build_record, :create_scope, :creation_attributes,
+		      :create, :create!, :concat, :create_record, :insert_record, :concat_records,
+		      :delete_all, :delete_all_on_destroy, :destroy_all, :delete, :destroy,
+		      :delete_or_destroy, :remove_records, :delete_records
+		    ].each do |name|
+          begin undef_method name
+          rescue NameError
+          end
         end
-
-        target
       end
       
-      # Overridden to use CustomAssociationScope.
+      # Overridden to use CustomizableAssociationScope.
       def association_scope
         @association_scope ||= CustomizableAssociationScope.new(self).scope if klass
       end
+    end
+    
+    # Patterned after belongs_to and has_one associations in AR.
+    class HasOneCustomAssociation < ActiveRecord::Associations::SingularAssociation
+      include CustomizableAssociation
+    end
+    
+    # Patterned after has_many associations in AR.
+    class HasManyCustomAssociation < ActiveRecord::Associations::CollectionAssociation
+      include CustomizableAssociation
       
     private
-
-      def find_target
-        scoped.first.tap { |record| set_inverse_instance(record) }
+      
+      # Copied from ActiveRecord::Associations::HasManyAssociation
+      def count_records
+        count = if options[:counter_sql] || options[:finder_sql]
+          reflection.klass.count_by_sql(custom_counter_sql)
+        else
+          scoped.count
+        end
+      
+        # If there's nothing in the database and @target has no new records
+        # we are certain the current target is an empty array. This is a
+        # documented side-effect of the method that may avoid an extra SELECT.
+        @target ||= [] and loaded! if count == 0
+      
+        [options[:limit], count].compact.min
       end
-
     end
 
   end
@@ -282,6 +268,7 @@ module CustomAssociations
 	  end
 	end
   
+	# Extensions to support custom associations.
   module Core
 	  extend ActiveSupport::Concern
 
@@ -314,7 +301,6 @@ module CustomAssociations
   def self.initialize!
     ::ActiveRecord::Base.send :include, Core
     ::ActiveRecord::Relation.send :include, Relation
-    #::ActiveRecord::Associations::Preloader.send :include, Associations::Preloader
     ::ActiveRecord::Associations::JoinDependency.send :include, Associations::JoinDependency
     ::ActiveRecord::Associations::JoinDependency::JoinAssociation.send :include, Associations::JoinAssociation
   end
