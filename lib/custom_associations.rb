@@ -76,45 +76,45 @@ module CustomAssociations
   # Customizable associations
   module Associations
 
-    # Extensions for the preloader strategy for eager-loading associated records.    
-    module Preloader
-      extend ActiveSupport::Concern
+#    # Extensions for the preloader strategy for eager-loading associated records.    
+#    module Preloader
+#      extend ActiveSupport::Concern
+#      
+#      included do
+#        alias_method_chain :preloader_for, :custom
+#      end
+#
+#      class HasOneCustom < ActiveRecord::Associations::Preloader::HasOne
+#        
+#        # Overridden to includes any specified joins.
+#        def build_scope
+#          super.joins(preload_options[:joins] || options[:joins])
+#        end
+#      end
+#      
+#      class HasManyCustom < ActiveRecord::Associations::Preloader::HasMany
+#        
+#        # Overridden to includes any specified joins.
+#        def build_scope
+#          super.joins(preload_options[:joins] || options[:joins])
+#        end
+#      end
+#      
+#    private
+#    		  
+#      def preloader_for_with_custom(reflection)
+#        case reflection.macro
+#        when :has_many_custom
+#          HasManyCustom
+#        when :has_one_custom
+#          HasOneCustom
+#        else
+#          preloader_for_without_custom(reflection)
+#        end
+#      end
+#    end
       
-      included do
-        alias_method_chain :preloader_for, :custom
-      end
-
-      class HasOneCustom < ActiveRecord::Associations::Preloader::HasOne
-        
-        # Overridden to includes any specified joins.
-        def build_scope
-          super.joins(preload_options[:joins] || options[:joins])
-        end
-      end
-      
-      class HasManyCustom < ActiveRecord::Associations::Preloader::HasMany
-        
-        # Overridden to includes any specified joins.
-        def build_scope
-          super.joins(preload_options[:joins] || options[:joins])
-        end
-      end
-      
-    private
-    		  
-      def preloader_for_with_custom(reflection)
-        case reflection.macro
-        when :has_many_custom
-          HasManyCustom
-        when :has_one_custom
-          HasOneCustom
-        else
-          preloader_for_without_custom(reflection)
-        end
-      end
-    end
-      
-    module CustomizableJoinAssociation
+    module JoinAssociation
       extend ActiveSupport::Concern
 		  
       included do
@@ -152,7 +152,7 @@ module CustomAssociations
 
     end
     
-    module CustomizableJoinDependency
+    module JoinDependency
       extend ActiveSupport::Concern
       
       included do
@@ -258,6 +258,29 @@ module CustomAssociations
 	    end
 	  end
 	end
+	
+	# Relation extensions to disable preloading for custom associations.
+	module Relation
+	  extend ActiveSupport::Concern
+		  
+	  included do
+	    alias_method_chain :eager_loading?, :custom
+	  end
+	  
+    def eager_loading_with_custom?
+      @should_eager_load ||= eager_loading_without_custom? || ! supports_preloading?
+    end
+
+	private
+	
+	  # Checks if this relation supports preloading (which is disabled for custom associations)
+	  def supports_preloading?(klass=@klass, includes=@includes_values)
+	    includes.all? do |(a,b)|
+	      a = klass.reflections[a.to_sym]
+	      a && ! a.is_a?(Reflection) && (! b.present? || supports_preloading?(a.klass, Array.wrap(b)))
+	    end
+	  end
+	end
   
   module Core
 	  extend ActiveSupport::Concern
@@ -290,9 +313,10 @@ module CustomAssociations
   # Installs this extension into ActiveRecord.
   def self.initialize!
     ::ActiveRecord::Base.send :include, Core
-    ::ActiveRecord::Associations::Preloader.send :include, Associations::Preloader
-    ::ActiveRecord::Associations::JoinDependency.send :include, Associations::CustomizableJoinDependency
-    ::ActiveRecord::Associations::JoinDependency::JoinAssociation.send :include, Associations::CustomizableJoinAssociation
+    ::ActiveRecord::Relation.send :include, Relation
+    #::ActiveRecord::Associations::Preloader.send :include, Associations::Preloader
+    ::ActiveRecord::Associations::JoinDependency.send :include, Associations::JoinDependency
+    ::ActiveRecord::Associations::JoinDependency::JoinAssociation.send :include, Associations::JoinAssociation
   end
 end
 
