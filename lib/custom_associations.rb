@@ -80,6 +80,10 @@ module CustomAssociations
     module Preloader
       extend ActiveSupport::Concern
       
+      included do
+        alias_method_chain :preloader_for, :custom
+      end
+
       class HasOneCustom < ActiveRecord::Associations::Preloader::HasOne
         
         # Overridden to includes any specified joins.
@@ -96,10 +100,6 @@ module CustomAssociations
         end
       end
       
-      included do
-        alias_method_chain :preloader_for, :custom
-      end
-
     private
     		  
       def preloader_for_with_custom(reflection)
@@ -117,20 +117,20 @@ module CustomAssociations
     module CustomizableJoinAssociation
       extend ActiveSupport::Concern
 		  
+      included do
+        alias_method_chain :build_constraint, :custom
+      end
+
 		  # HACK: Dummy constraint node for integrating custom associations with ActiveRecord.
 		  DummyConstraint = Object.new.tap{|o| def o.and(conditions) conditions end }.freeze
 
       # Overridden to support custom associations.
-	    def build_constraint(reflection, table, key, foreign_table, foreign_key)
+	    def build_constraint_with_custom(reflection, table, key, foreign_table, foreign_key)
         case reflection.source_macro
         when :has_one_custom, :has_many_custom
-		      if reflection.klass.finder_needs_type_condition?
-		        reflection.klass.send(:type_condition, table)
-		      else
-            CustomAssociations::DummyConstraint.new
-		      end
+		      reflection.klass.finder_needs_type_condition? ? reflection.klass.send(:type_condition, table) : DummyConstraint
         else
-          super
+          build_constraint_without_custom(reflection, table, key, foreign_table, foreign_key)
         end
 	    end
     end
@@ -138,10 +138,14 @@ module CustomAssociations
     module CustomizableJoinDependency
       extend ActiveSupport::Concern
       
+      included do
+        alias_method_chain :construct_association, :custom
+      end
+
     protected
     
       # Overridden to support custom associations.
-      def construct_association(record, join_part, row)
+      def construct_association_with_custom(record, join_part, row)
         return if record.id.to_s != join_part.parent.record_id(row).to_s
 
         macro = join_part.reflection.macro
@@ -159,7 +163,7 @@ module CustomAssociations
           other.target.push(association) if association
           other.set_inverse_instance(association)
         else
-          associaton = super
+          associaton = construct_association_without_custom(record, join_part, row)
         end
         association
       end
