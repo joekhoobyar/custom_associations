@@ -119,20 +119,37 @@ module CustomAssociations
 		  
       included do
         alias_method_chain :build_constraint, :custom
+        alias_method_chain :join_to, :custom
       end
 
 		  # HACK: Dummy constraint node for integrating custom associations with ActiveRecord.
-		  DummyConstraint = Object.new.tap{|o| def o.and(conditions) conditions end }.freeze
+	    DummyConstraint = Object.new.tap{|o| def o.and(conditions) conditions end }.freeze
 
       # Overridden to support custom associations.
 	    def build_constraint_with_custom(reflection, table, key, foreign_table, foreign_key)
         case reflection.source_macro
         when :has_one_custom, :has_many_custom
-		      reflection.klass.finder_needs_type_condition? ? reflection.klass.send(:type_condition, table) : DummyConstraint
+		      return DummyConstraint unless reflection.klass.finder_needs_type_condition?
+		      reflection.klass.send(:type_condition, table)
         else
           build_constraint_without_custom(reflection, table, key, foreign_table, foreign_key)
         end
 	    end
+	    
+      # Overridden to support custom associations.
+      def join_to_with_custom(relation)
+        case reflection.source_macro
+        when :has_one_custom, :has_many_custom
+          Array.wrap(reflection.options[:joins]).each do |join|
+	          join = join.join(' ') if Array===join && join.all?{|j| j.is_a?(String)}
+	          next if join.blank?
+	          join = Arel.sql(join) if String===join
+	          relation.join(join)
+          end
+        end
+	      join_to_without_custom(relation)
+      end
+
     end
     
     module CustomizableJoinDependency
