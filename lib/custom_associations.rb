@@ -147,11 +147,10 @@ module CustomAssociations
       
     private
 
+      # Overridden to remove chain support.
       def add_constraints(scope)
         table, foreign_table = construct_tables
 
-        reflection, conditions = chain.first, conditions.first
-        
         if reflection.type
 	        scope = scope.where(table[reflection.type].eq(owner.class.base_class.name))
         end
