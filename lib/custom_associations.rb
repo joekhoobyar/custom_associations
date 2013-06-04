@@ -175,36 +175,55 @@ module CustomAssociations
       
     end
     
-    # Patterned after belongs_to and has_one associations in AR.
-    class HasOneCustomAssociation < ActiveRecord::Associations::Association
-
-      # Ensure that the association is readonly.
-      begin undef_method :creation_attributes, :set_owner_attributes, :build_record
-      rescue NameError
-      end
+    module CustomizableAssociation
       
-      # Copied from ActiveRecord::Associations::SingularAssociation
-      def reader(force_reload = false)
-        if force_reload
-          klass.uncached { reload }
-        elsif !loaded? || stale_target?
-          reload
+      # Undefine all mutator methods.
+      def self.included(base)
+        [ :writer, :ids_writer, :set_owner_attributes, :add_to_target, :set_new_record,
+          :replace, :replace_records, :callback, :callbacks_for,
+          :build, :build_record, :create_scope, :creation_attributes,
+		      :create, :create!, :concat, :create_record, :insert_record, :concat_records,
+		      :delete_all, :delete_all_on_destroy, :destroy_all, :delete, :destroy,
+		      :delete_or_destroy, :remove_records, :delete_records
+		    ].each do |name|
+          begin undef_method name
+          rescue NameError
+          end
         end
-
-        target
       end
       
-      # Overridden to use CustomAssociationScope.
+      # Overridden to use CustomizableAssociationScope.
       def association_scope
         @association_scope ||= CustomizableAssociationScope.new(self).scope if klass
       end
+    end
+    
+    # Patterned after belongs_to and has_one associations in AR.
+    class HasOneCustomAssociation < ActiveRecord::Associations::SingularAssociation
+      include CustomizableAssociation
+    end
+    
+    # Patterned after has_many associations in AR.
+    class HasManyCustomAssociation < ActiveRecord::Associations::CollectionAssociation
+      include CustomizableAssociation
       
     private
-
-      def find_target
-        scoped.first.tap { |record| set_inverse_instance(record) }
+      
+      # Copied from ActiveRecord::Associations::HasManyAssociation
+      def count_records
+        count = if options[:counter_sql] || options[:finder_sql]
+          reflection.klass.count_by_sql(custom_counter_sql)
+        else
+          scoped.count
+        end
+      
+        # If there's nothing in the database and @target has no new records
+        # we are certain the current target is an empty array. This is a
+        # documented side-effect of the method that may avoid an extra SELECT.
+        @target ||= [] and loaded! if count == 0
+      
+        [options[:limit], count].compact.min
       end
-
     end
 
   end
