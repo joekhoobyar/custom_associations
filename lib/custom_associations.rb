@@ -75,9 +75,26 @@ module CustomAssociations
 
   # Customizable associations
   module Associations
-    
-    module CustomizablePreloader
+
+    # Extensions for the preloader strategy for eager-loading associated records.    
+    module Preloader
       extend ActiveSupport::Concern
+      
+      class HasOneCustom < ActiveRecord::Associations::Preloader::HasOne
+        
+        # Overridden to includes any specified joins.
+        def build_scope
+          super.joins(preload_options[:joins] || options[:joins])
+        end
+      end
+      
+      class HasManyCustom < ActiveRecord::Associations::Preloader::HasMany
+        
+        # Overridden to includes any specified joins.
+        def build_scope
+          super.joins(preload_options[:joins] || options[:joins])
+        end
+      end
       
       included do
         alias_method_chain :preloader_for, :custom
@@ -88,9 +105,9 @@ module CustomAssociations
       def preloader_for_with_custom(reflection)
         case reflection.macro
         when :has_many_custom
-          ActiveRecord::Associations::Preloader::HasMany
+          HasManyCustom
         when :has_one_custom
-          ActiveRecord::Associations::Preloader::HasOne
+          HasOneCustom
         else
           preloader_for_without_custom(reflection)
         end
@@ -252,7 +269,7 @@ module CustomAssociations
   # Installs this extension into ActiveRecord.
   def self.initialize!
     ::ActiveRecord::Base.send :include, Core
-    ::ActiveRecord::Associations::Preloader.send :include, Associations::CustomizablePreloader
+    ::ActiveRecord::Associations::Preloader.send :include, Associations::Preloader
     ::ActiveRecord::Associations::JoinDependency.send :include, Associations::CustomizableJoinDependency
     ::ActiveRecord::Associations::JoinDependency::JoinAssociation.send :include, Associations::CustomizableJoinAssociation
   end
