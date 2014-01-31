@@ -191,6 +191,11 @@ module CustomAssociations
           end
         end
       end
+
+			# Overridden to always return true.
+			def foreign_key_present?
+				true
+			end
       
       # Overridden to use CustomizableAssociationScope.
       def association_scope
