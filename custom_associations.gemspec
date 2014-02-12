@@ -11,7 +11,8 @@ Gem::Specification.new do |s|
   s.email       = ["joe@khoobyar.name"]
   s.homepage    = "http://joe.khoobyar.name"
   s.summary     = "ActiveRecord plugin to support custom associations"
-  s.description = "ActiveRecord plugin to support custom associations"
+  s.description = "This ActiveRecord plugin add very basic support custom associations, without any syntactic sugar (yet)."
+	s.license     = 'LGPL'
 
   s.files = Dir["{app,config,db,lib}/**/*"] + ["MIT-LICENSE", "Rakefile", "README.rdoc"]
   s.test_files = Dir["spec/**/*"]

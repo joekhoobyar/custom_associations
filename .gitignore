@@ -2,6 +2,7 @@
 .project
 .settings
 .bundle/
+*.gem
 log/*.log
 pkg/
 spec/dummy/db/*.sqlite3
